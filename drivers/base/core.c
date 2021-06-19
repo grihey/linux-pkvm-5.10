@@ -27,6 +27,7 @@
 #include <linux/netdevice.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
+#include <linux/swiotlb.h>
 #include <linux/sysfs.h>
 
 #include "base.h"
@@ -2461,6 +2462,9 @@ void device_initialize(struct device *dev)
 	dev->links.status = DL_DEV_NO_DRIVER;
 	dev->context_dev = false;
 	dev->no_dmabuf_defer_unmap = 0;
+#ifdef CONFIG_SWIOTLB
+	dev->dma_io_tlb_mem = io_tlb_default_mem;
+#endif
 }
 EXPORT_SYMBOL_GPL(device_initialize);
 
