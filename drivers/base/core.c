@@ -2463,7 +2463,7 @@ void device_initialize(struct device *dev)
 	dev->context_dev = false;
 	dev->no_dmabuf_defer_unmap = 0;
 #ifdef CONFIG_SWIOTLB
-	dev->dma_io_tlb_mem = io_tlb_default_mem;
+	dev->dma_io_tlb_mem = &io_tlb_default_mem;
 #endif
 }
 EXPORT_SYMBOL_GPL(device_initialize);
