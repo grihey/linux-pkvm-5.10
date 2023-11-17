@@ -45,6 +45,7 @@
 #include "../dmaengine.h"
 #include "../virt-dma.h"
 
+
 struct bam_desc_hw {
 	__le32 addr;		/* Buffer physical address */
 	__le16 size;		/* Buffer size in bytes */
@@ -425,7 +426,11 @@ static void bam_reset_channel(struct bam_chan *bchan)
 {
 	struct bam_device *bdev = bchan->bdev;
 
-	lockdep_assert_held(&bchan->vc.lock);
+	/*
+	 * Fix me: we would like to run
+	 * raw_lockdep_assert_held(&bchan->vc.lock);
+	 * ..but there is no raw version of lockdep_assert_held()
+	*/
 
 	/* reset channel */
 	writel_relaxed(1, bam_addr(bdev, bchan->id, BAM_P_RST));
@@ -549,9 +554,9 @@ static void bam_free_chan(struct dma_chan *chan)
 		goto err;
 	}
 
-	spin_lock_irqsave(&bchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flags);
 	bam_reset_channel(bchan);
-	spin_unlock_irqrestore(&bchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flags);
 
 	dma_free_wc(bdev->dev, BAM_DESC_FIFO_SIZE, bchan->fifo_virt,
 		    bchan->fifo_phys);
@@ -584,10 +589,10 @@ static int bam_slave_config(struct dma_chan *chan,
 	struct bam_chan *bchan = to_bam_chan(chan);
 	unsigned long flag;
 
-	spin_lock_irqsave(&bchan->vc.lock, flag);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flag);
 	memcpy(&bchan->slave, cfg, sizeof(*cfg));
 	bchan->reconfigure = 1;
-	spin_unlock_irqrestore(&bchan->vc.lock, flag);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flag);
 
 	return 0;
 }
@@ -692,7 +697,7 @@ static int bam_dma_terminate_all(struct dma_chan *chan)
 	LIST_HEAD(head);
 
 	/* remove all transactions, including active transaction */
-	spin_lock_irqsave(&bchan->vc.lock, flag);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flag);
 	/*
 	 * If we have transactions queued, then some might be committed to the
 	 * hardware in the desc fifo.  The only way to reset the desc fifo is
@@ -719,7 +724,7 @@ static int bam_dma_terminate_all(struct dma_chan *chan)
 	}
 
 	vchan_get_all_descriptors(&bchan->vc, &head);
-	spin_unlock_irqrestore(&bchan->vc.lock, flag);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flag);
 
 	vchan_dma_desc_free_list(&bchan->vc, &head);
 
@@ -742,10 +747,10 @@ static int bam_pause(struct dma_chan *chan)
 	if (ret < 0)
 		return ret;
 
-	spin_lock_irqsave(&bchan->vc.lock, flag);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flag);
 	writel_relaxed(1, bam_addr(bdev, bchan->id, BAM_P_HALT));
 	bchan->paused = 1;
-	spin_unlock_irqrestore(&bchan->vc.lock, flag);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flag);
 	pm_runtime_mark_last_busy(bdev->dev);
 	pm_runtime_put_autosuspend(bdev->dev);
 
@@ -768,10 +773,10 @@ static int bam_resume(struct dma_chan *chan)
 	if (ret < 0)
 		return ret;
 
-	spin_lock_irqsave(&bchan->vc.lock, flag);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flag);
 	writel_relaxed(0, bam_addr(bdev, bchan->id, BAM_P_HALT));
 	bchan->paused = 0;
-	spin_unlock_irqrestore(&bchan->vc.lock, flag);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flag);
 	pm_runtime_mark_last_busy(bdev->dev);
 	pm_runtime_put_autosuspend(bdev->dev);
 
@@ -808,7 +813,7 @@ static u32 process_channel_irqs(struct bam_device *bdev)
 
 		writel_relaxed(pipe_stts, bam_addr(bdev, i, BAM_P_IRQ_CLR));
 
-		spin_lock_irqsave(&bchan->vc.lock, flags);
+		raw_spin_lock_irqsave(&bchan->vc.lock, flags);
 
 		offset = readl_relaxed(bam_addr(bdev, i, BAM_P_SW_OFSTS)) &
 				       P_SW_OFSTS_MASK;
@@ -848,7 +853,7 @@ static u32 process_channel_irqs(struct bam_device *bdev)
 			list_del(&async_desc->desc_node);
 		}
 
-		spin_unlock_irqrestore(&bchan->vc.lock, flags);
+		raw_spin_unlock_irqrestore(&bchan->vc.lock, flags);
 	}
 
 	return srcs;
@@ -921,7 +926,7 @@ static enum dma_status bam_tx_status(struct dma_chan *chan, dma_cookie_t cookie,
 	if (!txstate)
 		return bchan->paused ? DMA_PAUSED : ret;
 
-	spin_lock_irqsave(&bchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flags);
 	vd = vchan_find_desc(&bchan->vc, cookie);
 	if (vd) {
 		residue = container_of(vd, struct bam_async_desc, vd)->length;
@@ -936,7 +941,7 @@ static enum dma_status bam_tx_status(struct dma_chan *chan, dma_cookie_t cookie,
 		}
 	}
 
-	spin_unlock_irqrestore(&bchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flags);
 
 	dma_set_residue(txstate, residue);
 
@@ -986,7 +991,11 @@ static void bam_start_dma(struct bam_chan *bchan)
 	unsigned int avail;
 	struct dmaengine_desc_callback cb;
 
-	lockdep_assert_held(&bchan->vc.lock);
+	/*
+	 * Fix me: we would like to run
+	 * raw_lockdep_assert_held(&bchan->vc.lock);
+	 * ..but there is no raw version of lockdep_assert_held()
+	*/
 
 	if (!vd)
 		return;
@@ -1084,11 +1093,11 @@ static void dma_tasklet(struct tasklet_struct *t)
 	/* go through the channels and kick off transactions */
 	for (i = 0; i < bdev->num_channels; i++) {
 		bchan = &bdev->channels[i];
-		spin_lock_irqsave(&bchan->vc.lock, flags);
+		raw_spin_lock_irqsave(&bchan->vc.lock, flags);
 
 		if (!list_empty(&bchan->vc.desc_issued) && !IS_BUSY(bchan))
 			bam_start_dma(bchan);
-		spin_unlock_irqrestore(&bchan->vc.lock, flags);
+		raw_spin_unlock_irqrestore(&bchan->vc.lock, flags);
 	}
 
 }
@@ -1104,13 +1113,13 @@ static void bam_issue_pending(struct dma_chan *chan)
 	struct bam_chan *bchan = to_bam_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&bchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&bchan->vc.lock, flags);
 
 	/* if work pending and idle, start a transaction */
 	if (vchan_issue_pending(&bchan->vc) && !IS_BUSY(bchan))
 		bam_start_dma(bchan);
 
-	spin_unlock_irqrestore(&bchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&bchan->vc.lock, flags);
 }
 
 /**

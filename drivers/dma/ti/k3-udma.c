@@ -1026,7 +1026,7 @@ static irqreturn_t udma_ring_irq_handler(int irq, void *data)
 	if (udma_pop_from_ring(uc, &paddr) || !paddr)
 		return IRQ_HANDLED;
 
-	spin_lock_irqsave(&uc->vc.lock, flags);
+	raw_spin_lock_irqsave(&uc->vc.lock, flags);
 
 	/* Teardown completion message */
 	if (cppi5_desc_is_tdcm(paddr)) {
@@ -1077,7 +1077,7 @@ static irqreturn_t udma_ring_irq_handler(int irq, void *data)
 		}
 	}
 out:
-	spin_unlock_irqrestore(&uc->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uc->vc.lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -1088,7 +1088,7 @@ static irqreturn_t udma_udma_irq_handler(int irq, void *data)
 	struct udma_desc *d;
 	unsigned long flags;
 
-	spin_lock_irqsave(&uc->vc.lock, flags);
+	raw_spin_lock_irqsave(&uc->vc.lock, flags);
 	d = uc->desc;
 	if (d) {
 		d->tr_idx = (d->tr_idx + 1) % d->sglen;
@@ -1103,7 +1103,7 @@ static irqreturn_t udma_udma_irq_handler(int irq, void *data)
 		}
 	}
 
-	spin_unlock_irqrestore(&uc->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uc->vc.lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -2673,7 +2673,7 @@ static void udma_issue_pending(struct dma_chan *chan)
 	struct udma_chan *uc = to_udma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&uc->vc.lock, flags);
+	raw_spin_lock_irqsave(&uc->vc.lock, flags);
 
 	/* If we have something pending and no active descriptor, then */
 	if (vchan_issue_pending(&uc->vc) && !uc->desc) {
@@ -2687,7 +2687,7 @@ static void udma_issue_pending(struct dma_chan *chan)
 			udma_start(uc);
 	}
 
-	spin_unlock_irqrestore(&uc->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uc->vc.lock, flags);
 }
 
 static enum dma_status udma_tx_status(struct dma_chan *chan,
@@ -2698,7 +2698,7 @@ static enum dma_status udma_tx_status(struct dma_chan *chan,
 	enum dma_status ret;
 	unsigned long flags;
 
-	spin_lock_irqsave(&uc->vc.lock, flags);
+	raw_spin_lock_irqsave(&uc->vc.lock, flags);
 
 	ret = dma_cookie_status(chan, cookie, txstate);
 
@@ -2760,7 +2760,7 @@ static enum dma_status udma_tx_status(struct dma_chan *chan,
 	}
 
 out:
-	spin_unlock_irqrestore(&uc->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uc->vc.lock, flags);
 	return ret;
 }
 
@@ -2824,7 +2824,7 @@ static int udma_terminate_all(struct dma_chan *chan)
 	unsigned long flags;
 	LIST_HEAD(head);
 
-	spin_lock_irqsave(&uc->vc.lock, flags);
+	raw_spin_lock_irqsave(&uc->vc.lock, flags);
 
 	if (udma_is_chan_running(uc))
 		udma_stop(uc);
@@ -2839,7 +2839,7 @@ static int udma_terminate_all(struct dma_chan *chan)
 	uc->paused = false;
 
 	vchan_get_all_descriptors(&uc->vc, &head);
-	spin_unlock_irqrestore(&uc->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uc->vc.lock, flags);
 	vchan_dma_desc_free_list(&uc->vc, &head);
 
 	return 0;
@@ -2916,7 +2916,7 @@ static void udma_vchan_complete(struct tasklet_struct *t)
 	struct dmaengine_desc_callback cb;
 	LIST_HEAD(head);
 
-	spin_lock_irq(&vc->lock);
+	raw_spin_lock_irq(&vc->lock);
 	list_splice_tail_init(&vc->desc_completed, &head);
 	vd = vc->cyclic;
 	if (vd) {
@@ -2925,7 +2925,7 @@ static void udma_vchan_complete(struct tasklet_struct *t)
 	} else {
 		memset(&cb, 0, sizeof(cb));
 	}
-	spin_unlock_irq(&vc->lock);
+	raw_spin_unlock_irq(&vc->lock);
 
 	udma_desc_pre_callback(vc, vd, NULL);
 	dmaengine_desc_callback_invoke(&cb, NULL);

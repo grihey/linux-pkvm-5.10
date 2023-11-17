@@ -228,19 +228,19 @@ static irqreturn_t k3_dma_int_handler(int irq, void *dev_id)
 			p = &d->phy[i];
 			c = p->vchan;
 			if (c && (tc1 & BIT(i))) {
-				spin_lock_irqsave(&c->vc.lock, flags);
+				raw_spin_lock_irqsave(&c->vc.lock, flags);
 				if (p->ds_run != NULL) {
 					vchan_cookie_complete(&p->ds_run->vd);
 					p->ds_done = p->ds_run;
 					p->ds_run = NULL;
 				}
-				spin_unlock_irqrestore(&c->vc.lock, flags);
+				raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 			}
 			if (c && (tc2 & BIT(i))) {
-				spin_lock_irqsave(&c->vc.lock, flags);
+				raw_spin_lock_irqsave(&c->vc.lock, flags);
 				if (p->ds_run != NULL)
 					vchan_cyclic_callback(&p->ds_run->vd);
-				spin_unlock_irqrestore(&c->vc.lock, flags);
+				raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 			}
 			irq_chan |= BIT(i);
 		}
@@ -306,7 +306,7 @@ static void k3_dma_tasklet(struct tasklet_struct *t)
 
 	/* check new dma request of running channel in vc->desc_issued */
 	list_for_each_entry_safe(c, cn, &d->slave.channels, vc.chan.device_node) {
-		spin_lock_irq(&c->vc.lock);
+		raw_spin_lock_irq(&c->vc.lock);
 		p = c->phy;
 		if (p && p->ds_done) {
 			if (k3_dma_start_txd(c)) {
@@ -317,7 +317,7 @@ static void k3_dma_tasklet(struct tasklet_struct *t)
 				p->vchan = NULL;
 			}
 		}
-		spin_unlock_irq(&c->vc.lock);
+		raw_spin_unlock_irq(&c->vc.lock);
 	}
 
 	/* check new channel request in d->chan_pending */
@@ -350,9 +350,9 @@ static void k3_dma_tasklet(struct tasklet_struct *t)
 			p = &d->phy[pch];
 			c = p->vchan;
 			if (c) {
-				spin_lock_irq(&c->vc.lock);
+				raw_spin_lock_irq(&c->vc.lock);
 				k3_dma_start_txd(c);
-				spin_unlock_irq(&c->vc.lock);
+				raw_spin_unlock_irq(&c->vc.lock);
 			}
 		}
 	}
@@ -387,7 +387,7 @@ static enum dma_status k3_dma_tx_status(struct dma_chan *chan,
 	if (ret == DMA_COMPLETE)
 		return ret;
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	p = c->phy;
 	ret = c->status;
 
@@ -415,7 +415,7 @@ static enum dma_status k3_dma_tx_status(struct dma_chan *chan,
 				break;
 		}
 	}
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 	dma_set_residue(state, bytes);
 	return ret;
 }
@@ -426,7 +426,7 @@ static void k3_dma_issue_pending(struct dma_chan *chan)
 	struct k3_dma_dev *d = to_k3_dma(chan->device);
 	unsigned long flags;
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	/* add request to vc->desc_issued */
 	if (vchan_issue_pending(&c->vc)) {
 		spin_lock(&d->lock);
@@ -442,7 +442,7 @@ static void k3_dma_issue_pending(struct dma_chan *chan)
 		spin_unlock(&d->lock);
 	} else
 		dev_dbg(d->slave.dev, "vchan %p: nothing to issue\n", &c->vc);
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 }
 
 static void k3_dma_fill_desc(struct k3_dma_desc_sw *ds, dma_addr_t dst,
@@ -734,7 +734,7 @@ static int k3_dma_terminate_all(struct dma_chan *chan)
 	spin_unlock(&d->lock);
 
 	/* Clear the tx descriptor lists */
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	vchan_get_all_descriptors(&c->vc, &head);
 	if (p) {
 		/* vchan is assigned to a pchan - stop the channel */
@@ -747,7 +747,7 @@ static int k3_dma_terminate_all(struct dma_chan *chan)
 		}
 		p->ds_done = NULL;
 	}
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 	vchan_dma_desc_free_list(&c->vc, &head);
 
 	return 0;
@@ -789,7 +789,7 @@ static int k3_dma_transfer_resume(struct dma_chan *chan)
 	unsigned long flags;
 
 	dev_dbg(d->slave.dev, "vchan %p: resume\n", &c->vc);
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	if (c->status == DMA_PAUSED) {
 		c->status = DMA_IN_PROGRESS;
 		if (p) {
@@ -800,7 +800,7 @@ static int k3_dma_transfer_resume(struct dma_chan *chan)
 			spin_unlock(&d->lock);
 		}
 	}
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 
 	return 0;
 }

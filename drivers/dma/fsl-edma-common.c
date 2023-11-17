@@ -163,12 +163,12 @@ int fsl_edma_terminate_all(struct dma_chan *chan)
 	unsigned long flags;
 	LIST_HEAD(head);
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 	fsl_edma_disable_request(fsl_chan);
 	fsl_chan->edesc = NULL;
 	fsl_chan->idle = true;
 	vchan_get_all_descriptors(&fsl_chan->vchan, &head);
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 	vchan_dma_desc_free_list(&fsl_chan->vchan, &head);
 	return 0;
 }
@@ -179,13 +179,13 @@ int fsl_edma_pause(struct dma_chan *chan)
 	struct fsl_edma_chan *fsl_chan = to_fsl_edma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 	if (fsl_chan->edesc) {
 		fsl_edma_disable_request(fsl_chan);
 		fsl_chan->status = DMA_PAUSED;
 		fsl_chan->idle = true;
 	}
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(fsl_edma_pause);
@@ -195,13 +195,13 @@ int fsl_edma_resume(struct dma_chan *chan)
 	struct fsl_edma_chan *fsl_chan = to_fsl_edma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 	if (fsl_chan->edesc) {
 		fsl_edma_enable_request(fsl_chan);
 		fsl_chan->status = DMA_IN_PROGRESS;
 		fsl_chan->idle = false;
 	}
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(fsl_edma_resume);
@@ -325,7 +325,7 @@ enum dma_status fsl_edma_tx_status(struct dma_chan *chan,
 	if (!txstate)
 		return fsl_chan->status;
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 	vdesc = vchan_find_desc(&fsl_chan->vchan, cookie);
 	if (fsl_chan->edesc && cookie == fsl_chan->edesc->vdesc.tx.cookie)
 		txstate->residue =
@@ -336,7 +336,7 @@ enum dma_status fsl_edma_tx_status(struct dma_chan *chan,
 	else
 		txstate->residue = 0;
 
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 
 	return fsl_chan->status;
 }
@@ -591,7 +591,11 @@ void fsl_edma_xfer_desc(struct fsl_edma_chan *fsl_chan)
 {
 	struct virt_dma_desc *vdesc;
 
-	lockdep_assert_held(&fsl_chan->vchan.lock);
+	/*
+	 * Fixme: We would like to do:
+	 * raw_lockdep_assert_held(&fsl_chan->vchan.lock);
+	 * ...but there is no raw version of lockdep_assert_held();
+	 */
 
 	vdesc = vchan_next_desc(&fsl_chan->vchan);
 	if (!vdesc)
@@ -609,10 +613,10 @@ void fsl_edma_issue_pending(struct dma_chan *chan)
 	struct fsl_edma_chan *fsl_chan = to_fsl_edma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 
 	if (unlikely(fsl_chan->pm_state != RUNNING)) {
-		spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+		raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 		/* cannot submit due to suspend */
 		return;
 	}
@@ -620,7 +624,7 @@ void fsl_edma_issue_pending(struct dma_chan *chan)
 	if (vchan_issue_pending(&fsl_chan->vchan) && !fsl_chan->edesc)
 		fsl_edma_xfer_desc(fsl_chan);
 
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 }
 EXPORT_SYMBOL_GPL(fsl_edma_issue_pending);
 
@@ -641,13 +645,13 @@ void fsl_edma_free_chan_resources(struct dma_chan *chan)
 	unsigned long flags;
 	LIST_HEAD(head);
 
-	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 	fsl_edma_disable_request(fsl_chan);
 	fsl_edma_chan_mux(fsl_chan, 0, false);
 	fsl_chan->edesc = NULL;
 	vchan_get_all_descriptors(&fsl_chan->vchan, &head);
 	fsl_edma_unprep_slave_dma(fsl_chan);
-	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 
 	vchan_dma_desc_free_list(&fsl_chan->vchan, &head);
 	dma_pool_destroy(fsl_chan->tcd_pool);

@@ -44,11 +44,11 @@ static irqreturn_t fsl_edma_tx_handler(int irq, void *dev_id)
 
 			fsl_chan = &fsl_edma->chans[ch];
 
-			spin_lock(&fsl_chan->vchan.lock);
+			raw_spin_lock(&fsl_chan->vchan.lock);
 
 			if (!fsl_chan->edesc) {
 				/* terminate_all called before */
-				spin_unlock(&fsl_chan->vchan.lock);
+				raw_spin_unlock(&fsl_chan->vchan.lock);
 				continue;
 			}
 
@@ -65,7 +65,7 @@ static irqreturn_t fsl_edma_tx_handler(int irq, void *dev_id)
 			if (!fsl_chan->edesc)
 				fsl_edma_xfer_desc(fsl_chan);
 
-			spin_unlock(&fsl_chan->vchan.lock);
+			raw_spin_unlock(&fsl_chan->vchan.lock);
 		}
 	}
 	return IRQ_HANDLED;
@@ -440,7 +440,7 @@ static int fsl_edma_suspend_late(struct device *dev)
 
 	for (i = 0; i < fsl_edma->n_chans; i++) {
 		fsl_chan = &fsl_edma->chans[i];
-		spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+		raw_spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
 		/* Make sure chan is idle or will force disable. */
 		if (unlikely(!fsl_chan->idle)) {
 			dev_warn(dev, "WARN: There is non-idle channel.");
@@ -449,7 +449,7 @@ static int fsl_edma_suspend_late(struct device *dev)
 		}
 
 		fsl_chan->pm_state = SUSPENDED;
-		spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+		raw_spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 	}
 
 	return 0;

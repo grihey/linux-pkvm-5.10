@@ -809,9 +809,9 @@ static void sdma_update_channel_loop(struct sdma_channel *sdmac)
 		 * SDMA transaction status by the time the client tasklet is
 		 * executed.
 		 */
-		spin_unlock(&sdmac->vc.lock);
+		raw_spin_unlock(&sdmac->vc.lock);
 		dmaengine_desc_get_callback_invoke(&desc->vd.tx, NULL);
-		spin_lock(&sdmac->vc.lock);
+		raw_spin_lock(&sdmac->vc.lock);
 
 		if (error)
 			sdmac->status = old_status;
@@ -858,7 +858,7 @@ static irqreturn_t sdma_int_handler(int irq, void *dev_id)
 		struct sdma_channel *sdmac = &sdma->channel[channel];
 		struct sdma_desc *desc;
 
-		spin_lock(&sdmac->vc.lock);
+		raw_spin_lock(&sdmac->vc.lock);
 		desc = sdmac->desc;
 		if (desc) {
 			if (sdmac->flags & IMX_DMA_SG_LOOP) {
@@ -870,7 +870,7 @@ static irqreturn_t sdma_int_handler(int irq, void *dev_id)
 			}
 		}
 
-		spin_unlock(&sdmac->vc.lock);
+		raw_spin_unlock(&sdmac->vc.lock);
 		__clear_bit(channel, &stat);
 	}
 
@@ -1060,9 +1060,9 @@ static void sdma_channel_terminate_work(struct work_struct *work)
 	 */
 	usleep_range(1000, 2000);
 
-	spin_lock_irqsave(&sdmac->vc.lock, flags);
+	raw_spin_lock_irqsave(&sdmac->vc.lock, flags);
 	vchan_get_all_descriptors(&sdmac->vc, &head);
-	spin_unlock_irqrestore(&sdmac->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&sdmac->vc.lock, flags);
 	vchan_dma_desc_free_list(&sdmac->vc, &head);
 }
 
@@ -1071,7 +1071,7 @@ static int sdma_terminate_all(struct dma_chan *chan)
 	struct sdma_channel *sdmac = to_sdma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&sdmac->vc.lock, flags);
+	raw_spin_lock_irqsave(&sdmac->vc.lock, flags);
 
 	sdma_disable_channel(chan);
 
@@ -1081,7 +1081,7 @@ static int sdma_terminate_all(struct dma_chan *chan)
 		schedule_work(&sdmac->terminate_worker);
 	}
 
-	spin_unlock_irqrestore(&sdmac->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&sdmac->vc.lock, flags);
 
 	return 0;
 }
@@ -1649,7 +1649,7 @@ static enum dma_status sdma_tx_status(struct dma_chan *chan,
 	if (ret == DMA_COMPLETE || !txstate)
 		return ret;
 
-	spin_lock_irqsave(&sdmac->vc.lock, flags);
+	raw_spin_lock_irqsave(&sdmac->vc.lock, flags);
 
 	vd = vchan_find_desc(&sdmac->vc, cookie);
 	if (vd)
@@ -1667,7 +1667,7 @@ static enum dma_status sdma_tx_status(struct dma_chan *chan,
 		residue = 0;
 	}
 
-	spin_unlock_irqrestore(&sdmac->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&sdmac->vc.lock, flags);
 
 	dma_set_tx_state(txstate, chan->completed_cookie, chan->cookie,
 			 residue);
@@ -1680,10 +1680,10 @@ static void sdma_issue_pending(struct dma_chan *chan)
 	struct sdma_channel *sdmac = to_sdma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&sdmac->vc.lock, flags);
+	raw_spin_lock_irqsave(&sdmac->vc.lock, flags);
 	if (vchan_issue_pending(&sdmac->vc) && !sdmac->desc)
 		sdma_start_desc(sdmac);
-	spin_unlock_irqrestore(&sdmac->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&sdmac->vc.lock, flags);
 }
 
 #define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V1	34
