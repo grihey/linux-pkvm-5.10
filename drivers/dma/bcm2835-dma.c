@@ -468,7 +468,7 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 			return IRQ_NONE;
 	}
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 
 	/*
 	 * Clear the INT flag to receive further interrupts. Keep the channel
@@ -492,7 +492,7 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 		}
 	}
 
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -571,7 +571,7 @@ static enum dma_status bcm2835_dma_tx_status(struct dma_chan *chan,
 	if (ret == DMA_COMPLETE || !txstate)
 		return ret;
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	vd = vchan_find_desc(&c->vc, cookie);
 	if (vd) {
 		txstate->residue =
@@ -592,7 +592,7 @@ static enum dma_status bcm2835_dma_tx_status(struct dma_chan *chan,
 		txstate->residue = 0;
 	}
 
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 
 	return ret;
 }
@@ -602,11 +602,11 @@ static void bcm2835_dma_issue_pending(struct dma_chan *chan)
 	struct bcm2835_chan *c = to_bcm2835_dma_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 	if (vchan_issue_pending(&c->vc) && !c->desc)
 		bcm2835_dma_start_desc(c);
 
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 }
 
 static struct dma_async_tx_descriptor *bcm2835_dma_prep_dma_memcpy(
@@ -791,7 +791,7 @@ static int bcm2835_dma_terminate_all(struct dma_chan *chan)
 	unsigned long flags;
 	LIST_HEAD(head);
 
-	spin_lock_irqsave(&c->vc.lock, flags);
+	raw_spin_lock_irqsave(&c->vc.lock, flags);
 
 	/* stop DMA activity */
 	if (c->desc) {
@@ -801,7 +801,7 @@ static int bcm2835_dma_terminate_all(struct dma_chan *chan)
 	}
 
 	vchan_get_all_descriptors(&c->vc, &head);
-	spin_unlock_irqrestore(&c->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&c->vc.lock, flags);
 	vchan_dma_desc_free_list(&c->vc, &head);
 
 	return 0;

@@ -648,7 +648,7 @@ static irqreturn_t owl_dma_interrupt(int irq, void *dev_id)
 			continue;
 		}
 
-		spin_lock(&vchan->vc.lock);
+		raw_spin_lock(&vchan->vc.lock);
 
 		txd = vchan->txd;
 		if (txd) {
@@ -666,7 +666,7 @@ static irqreturn_t owl_dma_interrupt(int irq, void *dev_id)
 				owl_dma_phy_free(od, vchan);
 		}
 
-		spin_unlock(&vchan->vc.lock);
+		raw_spin_unlock(&vchan->vc.lock);
 	}
 
 	return IRQ_HANDLED;
@@ -700,7 +700,7 @@ static int owl_dma_terminate_all(struct dma_chan *chan)
 	unsigned long flags;
 	LIST_HEAD(head);
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	if (vchan->pchan)
 		owl_dma_phy_free(od, vchan);
@@ -712,7 +712,7 @@ static int owl_dma_terminate_all(struct dma_chan *chan)
 
 	vchan_get_all_descriptors(&vchan->vc, &head);
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	vchan_dma_desc_free_list(&vchan->vc, &head);
 
@@ -739,11 +739,11 @@ static int owl_dma_pause(struct dma_chan *chan)
 	struct owl_dma_vchan *vchan = to_owl_vchan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	owl_dma_pause_pchan(vchan->pchan);
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	return 0;
 }
@@ -758,11 +758,11 @@ static int owl_dma_resume(struct dma_chan *chan)
 
 	dev_dbg(chan2dev(chan), "vchan %p: resume\n", &vchan->vc);
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	owl_dma_resume_pchan(vchan->pchan);
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	return 0;
 }
@@ -816,7 +816,7 @@ static enum dma_status owl_dma_tx_status(struct dma_chan *chan,
 	if (ret == DMA_COMPLETE || !state)
 		return ret;
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	vd = vchan_find_desc(&vchan->vc, cookie);
 	if (vd) {
@@ -827,7 +827,7 @@ static enum dma_status owl_dma_tx_status(struct dma_chan *chan,
 		bytes = owl_dma_getbytes_chan(vchan);
 	}
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	dma_set_residue(state, bytes);
 
@@ -854,12 +854,12 @@ static void owl_dma_issue_pending(struct dma_chan *chan)
 	struct owl_dma_vchan *vchan = to_owl_vchan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 	if (vchan_issue_pending(&vchan->vc)) {
 		if (!vchan->pchan)
 			owl_dma_phy_alloc_and_start(vchan);
 	}
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 }
 
 static struct dma_async_tx_descriptor

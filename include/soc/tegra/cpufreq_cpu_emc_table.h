@@ -24,24 +24,30 @@ struct cpu_emc_mapping {
 
 #ifdef CONFIG_TEGRA_BWMGR
 extern struct cpu_emc_mapping*
-tegra_cpufreq_cpu_emc_map_dt_init(struct device_node *);
+tegra_cpufreq_cpu_emc_map_dt_init(struct device_node *n);
 
 extern unsigned long
-tegra_cpu_to_emc_freq(uint32_t, struct cpu_emc_mapping *);
+tegra_cpu_to_emc_freq(uint32_t cpu, struct cpu_emc_mapping *m);
 
-extern struct dentry *tegra_debugfs_create_cpu_emc_map(struct dentry *,
-		struct cpu_emc_mapping *);
+extern struct dentry *tegra_debugfs_create_cpu_emc_map(struct dentry *d,
+		struct cpu_emc_mapping *m);
 
 #else
-struct cpu_emc_mapping *tegra_cpufreq_cpu_emc_map_dt_init(struct device_node *)
-{ }
+static inline struct cpu_emc_mapping *tegra_cpufreq_cpu_emc_map_dt_init(struct device_node *n)
+{
+	return NULL;
+}
 
-unsigned long tegra_cpu_to_emc_freq(uint32_t, struct cpu_emc_mapping *)
-{ }
+static inline unsigned long tegra_cpu_to_emc_freq(uint32_t cpu, struct cpu_emc_mapping *m)
+{
+	return 0;
+}
 
-struct dentry *tegra_debugfs_create_cpu_emc_map(struct dentry *,
-		struct cpu_emc_mapping *)
-{ }
+static inline struct dentry *tegra_debugfs_create_cpu_emc_map(struct dentry *d,
+		struct cpu_emc_mapping *m)
+{
+	return NULL;
+}
 #endif
 
 #endif
