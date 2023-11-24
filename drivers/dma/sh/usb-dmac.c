@@ -273,9 +273,9 @@ static int usb_dmac_desc_alloc(struct usb_dmac_chan *chan, unsigned int sg_len,
 	desc->sg_allocated_len = sg_len;
 	INIT_LIST_HEAD(&desc->node);
 
-	spin_lock_irqsave(&chan->vc.lock, flags);
+	raw_spin_lock_irqsave(&chan->vc.lock, flags);
 	list_add_tail(&desc->node, &chan->desc_freed);
-	spin_unlock_irqrestore(&chan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&chan->vc.lock, flags);
 
 	return 0;
 }
@@ -302,24 +302,24 @@ static struct usb_dmac_desc *usb_dmac_desc_get(struct usb_dmac_chan *chan,
 	unsigned long flags;
 
 	/* Get a freed descritpor */
-	spin_lock_irqsave(&chan->vc.lock, flags);
+	raw_spin_lock_irqsave(&chan->vc.lock, flags);
 	list_for_each_entry(desc, &chan->desc_freed, node) {
 		if (sg_len <= desc->sg_allocated_len) {
 			list_move_tail(&desc->node, &chan->desc_got);
-			spin_unlock_irqrestore(&chan->vc.lock, flags);
+			raw_spin_unlock_irqrestore(&chan->vc.lock, flags);
 			return desc;
 		}
 	}
-	spin_unlock_irqrestore(&chan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&chan->vc.lock, flags);
 
 	/* Allocate a new descriptor */
 	if (!usb_dmac_desc_alloc(chan, sg_len, gfp)) {
 		/* If allocated the desc, it was added to tail of the list */
-		spin_lock_irqsave(&chan->vc.lock, flags);
+		raw_spin_lock_irqsave(&chan->vc.lock, flags);
 		desc = list_last_entry(&chan->desc_freed, struct usb_dmac_desc,
 				       node);
 		list_move_tail(&desc->node, &chan->desc_got);
-		spin_unlock_irqrestore(&chan->vc.lock, flags);
+		raw_spin_unlock_irqrestore(&chan->vc.lock, flags);
 		return desc;
 	}
 
@@ -331,9 +331,9 @@ static void usb_dmac_desc_put(struct usb_dmac_chan *chan,
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&chan->vc.lock, flags);
+	raw_spin_lock_irqsave(&chan->vc.lock, flags);
 	list_move_tail(&desc->node, &chan->desc_freed);
-	spin_unlock_irqrestore(&chan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&chan->vc.lock, flags);
 }
 
 /* -----------------------------------------------------------------------------
@@ -402,9 +402,9 @@ static void usb_dmac_free_chan_resources(struct dma_chan *chan)
 	unsigned long flags;
 
 	/* Protect against ISR */
-	spin_lock_irqsave(&uchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&uchan->vc.lock, flags);
 	usb_dmac_chan_halt(uchan);
-	spin_unlock_irqrestore(&uchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uchan->vc.lock, flags);
 
 	usb_dmac_desc_free(uchan);
 	vchan_free_chan_resources(&uchan->vc);
@@ -450,7 +450,7 @@ static int usb_dmac_chan_terminate_all(struct dma_chan *chan)
 	LIST_HEAD(head);
 	LIST_HEAD(list);
 
-	spin_lock_irqsave(&uchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&uchan->vc.lock, flags);
 	usb_dmac_chan_halt(uchan);
 	vchan_get_all_descriptors(&uchan->vc, &head);
 	if (uchan->desc)
@@ -458,7 +458,7 @@ static int usb_dmac_chan_terminate_all(struct dma_chan *chan)
 	list_splice_init(&uchan->desc_got, &list);
 	list_for_each_entry_safe(desc, _desc, &list, node)
 		list_move_tail(&desc->node, &uchan->desc_freed);
-	spin_unlock_irqrestore(&uchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uchan->vc.lock, flags);
 	vchan_dma_desc_free_list(&uchan->vc, &head);
 
 	return 0;
@@ -539,12 +539,12 @@ static enum dma_status usb_dmac_tx_status(struct dma_chan *chan,
 	if (!txstate)
 		return status;
 
-	spin_lock_irqsave(&uchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&uchan->vc.lock, flags);
 	if (status == DMA_COMPLETE)
 		residue = usb_dmac_chan_get_residue_if_complete(uchan, cookie);
 	else
 		residue = usb_dmac_chan_get_residue(uchan, cookie);
-	spin_unlock_irqrestore(&uchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uchan->vc.lock, flags);
 
 	dma_set_residue(txstate, residue);
 
@@ -556,10 +556,10 @@ static void usb_dmac_issue_pending(struct dma_chan *chan)
 	struct usb_dmac_chan *uchan = to_usb_dmac_chan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&uchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&uchan->vc.lock, flags);
 	if (vchan_issue_pending(&uchan->vc) && !uchan->desc)
 		usb_dmac_chan_start_desc(uchan);
-	spin_unlock_irqrestore(&uchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&uchan->vc.lock, flags);
 }
 
 static void usb_dmac_virt_desc_free(struct virt_dma_desc *vd)
@@ -603,7 +603,7 @@ static irqreturn_t usb_dmac_isr_channel(int irq, void *dev)
 	u32 chcr;
 	bool xfer_end = false;
 
-	spin_lock(&chan->vc.lock);
+	raw_spin_lock(&chan->vc.lock);
 
 	chcr = usb_dmac_chan_read(chan, USB_DMACHCR);
 	if (chcr & (USB_DMACHCR_TE | USB_DMACHCR_SP)) {
@@ -624,7 +624,7 @@ static irqreturn_t usb_dmac_isr_channel(int irq, void *dev)
 	if (xfer_end)
 		usb_dmac_isr_transfer_end(chan);
 
-	spin_unlock(&chan->vc.lock);
+	raw_spin_unlock(&chan->vc.lock);
 
 	return ret;
 }
