@@ -476,7 +476,7 @@ static void sun6i_dma_tasklet(struct tasklet_struct *t)
 	unsigned int pchan_idx;
 
 	list_for_each_entry(vchan, &sdev->slave.channels, vc.chan.device_node) {
-		spin_lock_irq(&vchan->vc.lock);
+		raw_spin_lock_irq(&vchan->vc.lock);
 
 		pchan = vchan->phy;
 
@@ -493,7 +493,7 @@ static void sun6i_dma_tasklet(struct tasklet_struct *t)
 				pchan->vchan = NULL;
 			}
 		}
-		spin_unlock_irq(&vchan->vc.lock);
+		raw_spin_unlock_irq(&vchan->vc.lock);
 	}
 
 	spin_lock_irq(&sdev->lock);
@@ -525,9 +525,9 @@ static void sun6i_dma_tasklet(struct tasklet_struct *t)
 		pchan = sdev->pchans + pchan_idx;
 		vchan = pchan->vchan;
 		if (vchan) {
-			spin_lock_irq(&vchan->vc.lock);
+			raw_spin_lock_irq(&vchan->vc.lock);
 			sun6i_dma_start_desc(vchan);
-			spin_unlock_irq(&vchan->vc.lock);
+			raw_spin_unlock_irq(&vchan->vc.lock);
 		}
 	}
 }
@@ -557,10 +557,10 @@ static irqreturn_t sun6i_dma_interrupt(int irq, void *dev_id)
 				if (vchan->cyclic) {
 					vchan_cyclic_callback(&pchan->desc->vd);
 				} else {
-					spin_lock(&vchan->vc.lock);
+					raw_spin_lock(&vchan->vc.lock);
 					vchan_cookie_complete(&pchan->desc->vd);
 					pchan->done = pchan->desc;
-					spin_unlock(&vchan->vc.lock);
+					raw_spin_unlock(&vchan->vc.lock);
 				}
 			}
 
@@ -865,7 +865,7 @@ static int sun6i_dma_resume(struct dma_chan *chan)
 
 	dev_dbg(chan2dev(chan), "vchan %p: resume\n", &vchan->vc);
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	if (pchan) {
 		writel(DMA_CHAN_PAUSE_RESUME,
@@ -876,7 +876,7 @@ static int sun6i_dma_resume(struct dma_chan *chan)
 		spin_unlock(&sdev->lock);
 	}
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	return 0;
 }
@@ -893,7 +893,7 @@ static int sun6i_dma_terminate_all(struct dma_chan *chan)
 	list_del_init(&vchan->node);
 	spin_unlock(&sdev->lock);
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	if (vchan->cyclic) {
 		vchan->cyclic = false;
@@ -917,7 +917,7 @@ static int sun6i_dma_terminate_all(struct dma_chan *chan)
 		pchan->done = NULL;
 	}
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	vchan_dma_desc_free_list(&vchan->vc, &head);
 
@@ -941,7 +941,7 @@ static enum dma_status sun6i_dma_tx_status(struct dma_chan *chan,
 	if (ret == DMA_COMPLETE || !state)
 		return ret;
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	vd = vchan_find_desc(&vchan->vc, cookie);
 	txd = to_sun6i_desc(&vd->tx);
@@ -955,7 +955,7 @@ static enum dma_status sun6i_dma_tx_status(struct dma_chan *chan,
 		bytes = sun6i_get_chan_size(pchan);
 	}
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 
 	dma_set_residue(state, bytes);
 
@@ -968,7 +968,7 @@ static void sun6i_dma_issue_pending(struct dma_chan *chan)
 	struct sun6i_vchan *vchan = to_sun6i_vchan(chan);
 	unsigned long flags;
 
-	spin_lock_irqsave(&vchan->vc.lock, flags);
+	raw_spin_lock_irqsave(&vchan->vc.lock, flags);
 
 	if (vchan_issue_pending(&vchan->vc)) {
 		spin_lock(&sdev->lock);
@@ -986,7 +986,7 @@ static void sun6i_dma_issue_pending(struct dma_chan *chan)
 			&vchan->vc);
 	}
 
-	spin_unlock_irqrestore(&vchan->vc.lock, flags);
+	raw_spin_unlock_irqrestore(&vchan->vc.lock, flags);
 }
 
 static void sun6i_dma_free_chan_resources(struct dma_chan *chan)
